@@ -1,0 +1,106 @@
+---
+#Running ansible playbook for coffeemaker
+
+- hosts: appservers
+  vars:
+    mysql_root_password: password
+    home_dir: "/home/vagrant/"
+  vars_prompt:
+    - name: "git_user"
+      prompt: "Enter your github username"
+      private: no
+    - name: "git_password"
+      prompt: "Enter your github password"
+      private: yes
+  become: yes
+  gather_facts: True
+  tasks:
+    - name: Installing git
+      apt: name=git state=latest update_cache=yes
+
+    - name: Cloning git repository
+      git:
+        repo: "https://{{ git_user | urlencode}}:{{ git_password | urlencode}}@github.ncsu.edu/engr-csc326-staff/Onboarding.git"
+        dest: /etc/repo/
+
+    - name: Install java 8 preresequesits
+      apt: name=python-software-properties
+
+    - name: Add Java 8 repository
+      apt_repository: repo='ppa:webupd8team/java'
+
+    - name: Agree to oracle license
+      debconf: name=oracle-java8-installer question=shared/accepted-oracle-license-v1-1 vtype=select value=true
+
+    - name: Install Java 8
+      apt: name=oracle-java8-installer force=yes
+
+    - name: install maven
+      apt: pkg={{ item }} state=latest update_cache=yes cache_valid_time=3600
+      with_items:
+        - maven
+
+    - name: Adding MySQL repo
+      get_url:
+        url: https://dev.mysql.com/get/mysql-apt-config_0.8.6-1_all.deb
+        dest: "{{home_dir}}"
+        mode: 0440
+
+    - name: Installing MySQL repo
+      apt: "deb={{home_dir}}/mysql-apt-config_0.8.6-1_all.deb"
+      become: true
+
+    - name: install python-mysqldb
+      apt:
+        name: python-mysqldb
+        state: present
+        update_cache: yes
+
+    - name: check latest version of mysql 5.7
+      command: bash -c "apt-cache showpkg mysql-server|grep 5.7|head -1|cut -d' ' -f1"
+      register: latestmysql57
+    - debug: msg= "{{ latestmysql57.stdout }}"
+
+    - name: install mysql5.7
+      apt:
+        name: mysql-server={{ latestmysql57.stdout }}
+        state: present
+        update_cache: yes
+
+    - name: Start the MySQL service
+      become: true
+      service:
+        name: mysql
+        state: started
+        enabled: true
+
+    - name: update mysql root password for all root accounts
+      become: true
+      mysql_user:
+        name: root
+        host: "{{ item }}"
+        password: "{{ mysql_root_password }}"
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        check_implicit_admin: yes
+        priv: "*.*:ALL,GRANT"
+      with_items:
+        - 127.0.0.1
+        - ::1
+        - localhost
+
+    - copy:
+        src: /etc/repo/env/templates/hibernate-template.cfg.xml
+        dest: /etc/repo/CoffeeMaker/src/main/resources/hibernate.cfg.xml
+        remote_src: yes
+
+    - replace:
+        dest: /etc/repo/CoffeeMaker/src/main/resources/hibernate.cfg.xml
+        regexp: "{% raw %}'{{mysql_password}}'{% endraw %}"
+        replace: 'password'
+
+    - name: Run mvn command
+      command: nohup mvn spring-boot:run
+      args:
+        chdir: /etc/repo/CoffeeMaker
+      sudo: yes

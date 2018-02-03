@@ -1,0 +1,40 @@
+- hosts: testingservers
+  become: yes
+  gather_facts: True
+  tasks:
+    - name: Install java 8 preresequesits
+      apt: name=python-software-properties
+
+    - name: Add Java 8 repository
+      apt_repository: repo='ppa:webupd8team/java'
+
+    - name: Agree to oracle license
+      debconf: name=oracle-java8-installer question=shared/accepted-oracle-license-v1-1 vtype=select value=true
+
+    - name: Install Java 8
+      apt: name=oracle-java8-installer force=yes
+    - name: Installing git
+      apt: name=git state=latest update_cache=yes
+
+    - name: Cloning git repository
+      git:
+        repo: "https://github.com/CSC-326/Onboarding-Selenium"
+        dest: /etc/repo/
+    
+    - replace:
+        dest: /etc/repo/src/src/test/java/selenium/tests/WebTest.java
+        regexp: 'localhost'
+        replace: '192.168.33.110'
+        backup: yes
+        
+    - name: Add Maven repository
+      apt_repository: repo='ppa:andrei-pozolotin/maven3'
+
+    - name: install maven
+      apt: name=maven3
+      sudo: yes
+      
+    - name: Running mvn command  
+      command: mvn test 
+      args: 
+        chdir:/etc/repo/src
