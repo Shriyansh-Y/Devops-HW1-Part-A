@@ -22,6 +22,8 @@ Simple maven project with selenium tests can be found [here](https://github.com/
 
 ### Ansible scripts:  
 
+- [Application server](https://github.ncsu.edu/scyadav/HW1/blob/master/appserver.yml)  
+- [Testing Server](https://github.ncsu.edu/scyadav/HW1/blob/master/testingserver.yml)
 
 ### ScreenCasts:
 
